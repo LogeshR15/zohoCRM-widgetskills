@@ -19,6 +19,9 @@ A Claude Code skill for building Zoho CRM widgets using the ZET CLI (`zoho-exten
   - `ZOHO.CRM.UI` — Popup, Record, Widget, Dialer, Resize
   - `ZOHO.CRM.$Client` — event bus
 - **Dev workflow** — `zet run`, cert trust, CRM sandbox, `zet validate`, `zet pack`, Sigma deploy
+- **Error handling** — API error patterns, retry logic, graceful degradation, monitoring
+- **Security** — protecting secrets, input validation, CSP/CORS, auth best practices, compliance
+- **Troubleshooting** — common issues, debugging tips, performance optimization
 
 ## Install in Claude Code
 
@@ -53,6 +56,9 @@ references/
   manifest.md              — plugin-manifest.json schema reference
   sdk.md                   — CRM JS SDK v1.5 full API reference
   workflow.md              — ZET CLI dev workflow and deploy steps
+  error-handling.md        — API error patterns, retry strategies, graceful degradation
+  security.md              — security best practices, secrets management, input validation
+  troubleshooting.md       — common issues, debugging, performance optimization
 ```
 
 ## License
