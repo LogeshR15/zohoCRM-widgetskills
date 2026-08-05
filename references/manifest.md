@@ -1,5 +1,15 @@
 # plugin-manifest.json — Schema Reference
 
+> **⚠ Verification status: UNVERIFIED.** Unlike `references/sdk.md`, the contents of this file have
+> **not** been checked against an authoritative Zoho source. The widget `location` strings, config
+> field rules, `cspDomains` keys, and `zet validate` limits below should be confirmed against the
+> Sigma / ZET manifest documentation before you rely on them. Treat the `location` table in
+> particular as a starting point — verify each string against your CRM build.
+>
+> Verified-source method, for whoever picks this up: the SDK reference was rebuilt from Zoho's own
+> JSON data store (see the provenance note at the top of `references/sdk.md`). The manifest schema
+> lives in a different doc property and needs its own equivalent pass.
+
 ## Minimal valid CRM manifest
 
 ```json
@@ -89,7 +99,7 @@ Config parameters are shown to the admin at install time. Two variants:
 
 | Key | Type | Required | Notes |
 |-----|------|----------|-------|
-| `name` | string | Yes | Config key name (used to fetch value via `ZOHO.CRM.CONFIG.getParameter`) |
+| `name` | string | Yes | Config key name (read at runtime via `ZOHO.CRM.API.getOrgVariable` — **not** `CONFIG.getParameter`, which does not exist) |
 | `userdefined` | boolean | Yes | Must be `true` for admin-configurable params |
 | `type` | string | Yes | Input type: `"text"`, `"select"`, `"checkbox"`, `"multiselectbox"`, `"password"` |
 | `default` | string | Yes | Placeholder or default value shown in install UI |

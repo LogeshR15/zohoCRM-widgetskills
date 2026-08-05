@@ -127,12 +127,37 @@ ZOHO.CRM.API.getRecord({ ... })
   });
 ```
 
-**Common API errors**:
-- `code: 1001` — Record locked or doesn't exist
-- `code: 1002` — No permission to read
-- `code: 1003` — Field doesn't exist or no permission
-- `code: 1004` — Invalid module name
-- `401` — Token expired, reload widget
+**Check 4: The call resolved but reports failure in the payload**
+
+The SDK publishes **no error-code table** — do not code against invented numeric codes. Success is
+reported inside the resolved value, so a `.then()` can still be a failure:
+
+```javascript
+ZOHO.CRM.API.updateRecord({ Entity: "Leads", APIData: { id: id, Lead_Status: "Contacted" } })
+  .then(function (res) {
+    console.log("resolved payload:", res);           // inspect this first
+    var entry = res && res.data && res.data[0];
+    if (!entry || String(entry.status).toLowerCase() !== "success") {
+      console.warn("Operation reported failure:", entry && entry.message);
+    }
+  })
+  .catch(function (err) { console.error("rejected:", err); });
+```
+
+Note the envelope differs per method — `{data:[…]}` for most record calls, a bare array for
+`upsertRecord`, a flat object for `approveRecord` / `updateBluePrint`, `{users:[…]}` for `getUser`,
+and the raw remote response for `HTTP.*`. See `references/sdk.md`.
+
+For numeric CRM codes, consult the
+[CRM REST API status codes](https://www.zoho.com/crm/developer/docs/api/v8/status-codes.html) —
+they belong to the REST API, not the widget SDK.
+
+**Check 5: You're calling a method that doesn't exist**
+
+Calls like `addRecord`, `CONFIG.getFields`, `CONFIG.getParameter`, `META.getEnvironment`,
+`CONNECTION.makeRequest`, `BLUEPRINT.getTransitions`, `UI.Dialer.open`, or `ZDK.Client.on` throw
+`TypeError: ... is not a function`. See the "Does not exist — do not use" table in
+`references/sdk.md` for the real name of each.
 
 ---
 
@@ -161,7 +186,9 @@ zet pack
 # Upload dist/widget.zip to CRM
 ```
 
-**Note**: You don't need to whitelist `ZOHO.CRM.HTTP` calls — they're always allowed.
+**Note**: Whether `ZOHO.CRM.HTTP.*` targets must also be listed in `cspDomains.connect-src` is not
+stated in the SDK reference. List them anyway — it's free and rules out a silent-failure class.
+If auth is involved, a Connection (`ZOHO.CRM.CONNECTION.invoke`) is the better tool.
 
 ---
 
@@ -328,16 +355,34 @@ cat app/translations/en.json
 ```
 
 **Check 3: Accessing translations correctly**
-```javascript
-// ❌ Won't work — ZOHO.CRM.META doesn't auto-translate
-const label = ZOHO.CRM.META.translate("widget.title");
 
-// ✓ Fetch translations manually
+The SDK has **no translation method** — there is no `ZOHO.CRM.META.translate`, and `ZOHO.CRM.META`
+contains only the six metadata methods listed in `references/sdk.md`. Load and apply strings yourself:
+
+```javascript
 fetch("app/translations/en.json")
   .then(r => r.json())
-  .then(translations => {
-    document.getElementById("title").textContent = translations.widget_title;
+  .then(function (t) {
+    document.getElementById("title").textContent = t.widget_title;
   });
+```
+
+**Check 4: Picking the user's locale**
+
+`CONFIG.getCurrentUser()` resolves a flat object that does **not** include `language`. To get the
+locale you need a second hop through `API.getUser`:
+
+```javascript
+ZOHO.CRM.CONFIG.getCurrentUser()
+  .then(function (u) { return ZOHO.CRM.API.getUser({ ID: u.id }); })
+  .then(function (res) {
+    var user = res.users[0];
+    var lang = (user.language || "en").split(/[-_]/)[0];   // e.g. "en", "fr"
+    return fetch("app/translations/" + lang + ".json")
+      .then(r => r.ok ? r.json() : fetch("app/translations/en.json").then(r2 => r2.json()));
+  })
+  .then(applyTranslations)
+  .catch(function () { return fetch("app/translations/en.json").then(r => r.json()); });
 ```
 
 ---
@@ -346,15 +391,28 @@ fetch("app/translations/en.json")
 
 ### Symptom: Multiple widgets load, but they interfere with each other
 
-**Solution**: Namespace your event listeners
-```javascript
-// ❌ Generic event names may conflict
-document.addEventListener("custom-event", handler);
+There is **no widget-to-widget event bus.** `ZOHO.CRM.$Client.on` and `.trigger` do not exist —
+`$Client` has exactly one method, `close([response])`. Each widget runs in its own sandboxed iframe
+with no shared DOM, so plain `document.addEventListener` cannot cross between them either.
 
-// ✓ Use widget-specific names
-document.addEventListener("widget-abc-custom-event", handler);
-ZOHO.CRM.$Client.trigger("widget-abc-custom-event", data);
+What actually exists for cross-widget communication:
+
+```javascript
+// Parent → child, and child → parent (v1.5, popup context only)
+var result = await ZDK.Client.openPopup(
+  { api_name: "child_widget", type: "widget" },
+  { seed: "data delivered as the child's PageLoad payload" }
+);
+// ...and in the child:
+$Client.close({ picked: "value returned to openPopup" });
+
+// Fire an event into CRM (present in the dataset, absent from the doc sidebar — semi-public)
+ZOHO.CRM.EVENTS.dispatch("my_event", { payload: 1 });
 ```
+
+If two independent widgets on the same record must share state, round-trip it through CRM — a
+record field, or a function via `ZOHO.CRM.FUNCTIONS.execute` — rather than expecting an in-browser
+channel.
 
 ---
 
@@ -364,29 +422,41 @@ ZOHO.CRM.$Client.trigger("widget-abc-custom-event", data);
 
 **Check 1: How many API calls are you making?**
 ```javascript
-// ❌ This makes 100 sequential API calls
-records.forEach(function(record) {
-  ZOHO.CRM.API.getRecord({ RecordID: record.id });  // Slow!
+// ❌ One call per row. Also invalid — Entity is required on getRecord.
+records.forEach(function (record) {
+  ZOHO.CRM.API.getRecord({ RecordID: record.id });
 });
 
-// ✓ Batch into a single call or use getAllRecords
-ZOHO.CRM.API.getAllRecords({ Entity: "Contacts", per_page: 200 });
+// ✓ One call. per_page is documented as a String on getAllRecords.
+ZOHO.CRM.API.getAllRecords({ Entity: "Contacts", per_page: "200" });
+
+// ✓✓ Or push the filtering server-side with COQL (v1.2+)
+ZOHO.CRM.API.coql({
+  select_query: "select Last_Name, Email from Contacts where Lead_Source = 'Web' limit 200"
+});
 ```
+
+Remember there is no `Fields` parameter on `getRecord` / `getAllRecords` / `searchRecord` — they
+return full records. `coql` is the only way to narrow the payload.
 
 **Check 2: Are you caching results?**
 ```javascript
-const cache = {};
+var cache = {};
 
-function getCachedRecord(id) {
-  if (cache[id]) return Promise.resolve(cache[id]);
-  
-  return ZOHO.CRM.API.getRecord({ RecordID: id })
-    .then(function(response) {
-      cache[id] = response.data[0];
-      return cache[id];
+function getCachedRecord(entity, id) {
+  var key = entity + ":" + id;
+  if (cache[key]) return Promise.resolve(cache[key]);
+
+  return ZOHO.CRM.API.getRecord({ Entity: entity, RecordID: id })   // Entity is required
+    .then(function (res) {
+      cache[key] = res && res.data && res.data[0];
+      return cache[key];
     });
 }
 ```
+
+Cache in a plain JS object, not `localStorage` — the widget iframe is sandboxed. And don't cache
+personal fields longer than the interaction needs (see `references/security.md`).
 
 **Check 3: Debounce rapid API calls**
 ```javascript
@@ -398,8 +468,13 @@ function debounce(fn, delay) {
   };
 }
 
-const debouncedSearch = debounce(function(query) {
-  ZOHO.CRM.API.searchRecord({ Type: "word", Query: query });
+// Entity, Type, Query and delay are all required on searchRecord.
+// page / per_page are POSITIONAL args after config — not keys inside it.
+var debouncedSearch = debounce(function (query) {
+  ZOHO.CRM.API.searchRecord(
+    { Entity: "Leads", Type: "word", Query: query, delay: false },
+    "1", "50"
+  );
 }, 500);
 ```
 
@@ -421,7 +496,19 @@ If you've tried the above and still have issues:
    cat ZET-debug.log
    ```
 5. **Consult the references**:
-   - `references/sdk.md` — API method signatures
-   - `references/manifest.md` — Manifest schema
-   - `references/error-handling.md` — Error patterns
+   - `references/sdk.md` — verified method signatures, plus a "Does not exist" table and the list
+     of self-contradictions in Zoho's own docs
+   - `references/manifest.md` — manifest schema (⚠ unverified)
+   - `references/error-handling.md` — error patterns
+   - `references/security.md` — secrets, CSP, permissions
 6. **Test with MCP tools** — If available, use `mcp__ZohoCRM__*` tools to verify live data
+7. **Verify the method exists before debugging further.** Much of the third-party material about
+   this SDK — including earlier revisions of these very files — documents methods that were never
+   real. Re-derive from Zoho's dataset rather than from a blog post:
+   ```bash
+   curl -s https://www.zohocrm.dev/fingerprint_config.json \
+     | jq -r '.default["dxh-data-store"]["widget-sdk-1.5.json"]'
+   ```
+   Then fetch `https://www.zohocrm.dev/dxh-data-store/widget-sdk-1.5_<hash>_.json`. Plain HTML
+   fetches of the doc pages return only an SPA shell, which is why so much bad information about
+   this SDK circulates.

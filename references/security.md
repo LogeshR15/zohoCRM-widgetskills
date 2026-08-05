@@ -36,15 +36,31 @@ In `plugin-manifest.json`:
 }
 ```
 
-In widget:
+In widget — the read method is `ZOHO.CRM.API.getOrgVariable`:
+
 ```javascript
-// Admin enters the key at install time; widget retrieves it safely
-ZOHO.CRM.CONFIG.getParameter("api_key")
-  .then(function(apiKey) {
-    // Use apiKey only in memory — never log or expose it
-    return makeAuthenticatedRequest(apiKey);
+// Admin enters the key at install time; widget reads it at runtime.
+// NOTE: getOrgVariable publishes no parameter table. Two calling forms exist,
+// and their response casing differs — handle both.
+ZOHO.CRM.API.getOrgVariable("api_key")
+  .then(function (res) {
+    var s = res && res.Success;
+    var apiKey = s ? (s.Content !== undefined ? s.Content : s.content) : null;
+    if (!apiKey) throw new Error("api_key not configured");
+    return makeAuthenticatedRequest(apiKey);   // keep in memory only
+  });
+
+// Batch form — returns { Success: { content: { key: { value } } } }
+ZOHO.CRM.API.getOrgVariable({ apiKeys: ["api_key", "webhook_url"] })
+  .then(function (res) {
+    var c = res && res.Success && (res.Success.content || res.Success.Content) || {};
+    var apiKey = c.api_key && c.api_key.value;
   });
 ```
+
+> There is **no `ZOHO.CRM.CONFIG.getParameter`** — that method does not exist in any SDK version.
+> `ZOHO.CRM.CONFIG` has exactly three methods (`getCurrentUser`, `getOrgInfo`,
+> `getUserPreference`). See `references/sdk.md`.
 
 ### Best practices for secrets
 
@@ -53,6 +69,9 @@ ZOHO.CRM.CONFIG.getParameter("api_key")
 - **Never log secrets** — Exclude from error reports, console output, CSP headers
 - **Rotate regularly** — Prompt admins to update credentials periodically
 - **Use short-lived tokens** — Prefer temporary access tokens over permanent API keys
+- **Don't pass a secret to `HTTP.*` if a Connection can do it** — `ZOHO.CRM.CONNECTION.invoke`
+  and `ZOHO.CRM.CONNECTOR.invokeAPI` keep OAuth credentials server-side, so the token never
+  enters widget JS at all. Prefer them over hand-managed keys.
 
 ## 2. Input Validation & XSS Prevention
 
@@ -136,24 +155,39 @@ if (!validateEmail(userData.Email)) {
 ### Minimize whitelisting
 
 - Only add domains you absolutely need
-- Prefer same-origin requests (communicate via ZOHO.CRM.HTTP which is always allowed)
 - Use HTTPS for all external URLs
 - Avoid wildcard domains (`https://*`)
+- Reach for a Connection/Connector before adding a domain plus a stored key
 
-### ZOHO.CRM.HTTP vs CORS
+### Prefer the SDK over raw `fetch`
+
+A browser `fetch` from the widget iframe is subject to the remote server's CORS policy, which you
+usually don't control. The SDK's request methods are mediated by CRM, which is what lets them
+attach credentials at all:
 
 ```javascript
-// ❌ This may fail due to CORS (blocked by browser)
-fetch("https://external-api.com/data")
-  .then(r => r.json());
+// ❌ Fails whenever the remote server doesn't send permissive CORS headers
+fetch("https://external-api.com/data").then(r => r.json());
 
-// ✓ This respects CSP and works
+// ✓ Mediated by CRM — and resolves the RAW remote response, not a {data:…} envelope
 ZOHO.CRM.HTTP.get({
   url: "https://external-api.com/data",
-  headers: { "Accept": "application/json" }
-})
-.then(r => r.data);
+  headers: { Accept: "application/json" }
+}).then(function (res) {
+  var payload = typeof res === "string" ? JSON.parse(res) : res;
+});
+
+// ✓✓ Best when the target needs auth — the OAuth token never enters widget JS
+ZOHO.CRM.CONNECTION.invoke("my_connection", {
+  url: "https://external-api.com/data",
+  method: "GET",
+  param_type: 1
+});
 ```
+
+> Whether `ZOHO.CRM.HTTP.*` targets must also appear in `cspDomains.connect-src` is not stated in
+> the SDK reference. Treat listing them as the safe default — it costs nothing and removes a
+> whole class of silent failure.
 
 ## 4. Authentication & Token Management
 
@@ -171,19 +205,38 @@ ZOHO.CRM.API.getRecord({ ... });
 
 ### Respect user permissions
 
+Calls run as the logged-in user and are bound by their module and field permissions. The SDK
+documents **no error codes**, and a permission denial is not guaranteed to reject — check the
+resolved payload:
+
 ```javascript
-// Always handle permission errors gracefully
 ZOHO.CRM.API.updateRecord({
   Entity: "Accounts",
   APIData: { id: recordId, Annual_Revenue: 1000000 }
 })
-.catch(function(err) {
-  if (err.code === 1002 || err.code === 1003) {
-    // User lacks edit permission
-    showError("You don't have permission to edit this record");
+.then(function (res) {
+  var entry = res && res.data && res.data[0];
+  if (!entry || String(entry.status).toLowerCase() !== "success") {
+    // Covers permission denial, validation failure, and locked records alike —
+    // the SDK does not let you distinguish them
+    showError(entry && entry.message || "Update was not applied");
     return;
   }
-  throw err;
+  showSuccess();
+})
+.catch(function (err) {
+  console.error("updateRecord rejected:", err);   // reject shape is undocumented
+  showError("Update failed");
+});
+```
+
+Don't offer an action the user can't perform. Gate the UI on their profile instead of letting the
+write fail:
+
+```javascript
+ZOHO.CRM.CONFIG.getCurrentUser().then(function (user) {
+  // user is a FLAT object: { id, full_name, email, profile: {name, id}, role: {...}, status }
+  if (user.profile && user.profile.name !== "Administrator") hideAdminControls();
 });
 ```
 
@@ -266,36 +319,51 @@ queued(() => ZOHO.CRM.API.updateRecord(...));
 
 ### Handle rate limiting gracefully
 
+Widget calls share the CRM REST API's rate limits, but the SDK does not document how a limit
+surfaces — so retry on any failure with a bounded count rather than matching a code you can't
+verify:
+
 ```javascript
 function makeApiCall(fn, maxRetries = 3, delay = 1000) {
-  return fn().catch(function(err) {
-    if (err.code === 429 && maxRetries > 0) {
-      // Rate limited — backoff and retry
-      return new Promise(function(resolve) {
-        setTimeout(() => {
-          resolve(makeApiCall(fn, maxRetries - 1, delay * 2));
-        }, delay);
-      });
-    }
-    throw err;
+  return fn().catch(function (err) {
+    if (maxRetries <= 1) throw err;
+    return new Promise(function (resolve) {
+      setTimeout(() => resolve(makeApiCall(fn, maxRetries - 1, delay * 2)), delay);
+    });
   });
 }
 ```
+
+Prefer fewer, larger calls over many small ones — `getAllRecords` with `per_page` beats N
+`getRecord` calls, and `coql` beats client-side filtering.
 
 ## 7. Data Privacy & Compliance
 
 ### Minimize data collection
 
-- Only request fields your widget actually needs
 - Don't cache sensitive data (email, phone, financial info)
 - Clear sensitive data from memory after use
+- Never put record data in a URL, a log payload, or an external analytics call
+
+**Field-level minimization is not available on `getRecord`.** There is no `Fields` parameter on
+`getRecord`, `getAllRecords`, or `searchRecord` — the SDK returns the full record whether you want
+it or not. So minimize on the way *out*, not on the way in:
 
 ```javascript
-// ✓ Request only what you need
-ZOHO.CRM.API.getRecord({
-  Entity: "Contacts",
-  RecordID: id,
-  Fields: ["Last_Name", "Company"]  // Not requesting Email, Phone, etc.
+// getRecord returns everything — project down before doing anything else with it
+ZOHO.CRM.API.getRecord({ Entity: "Contacts", RecordID: id })
+  .then(function (res) {
+    var full = res.data[0];
+    var safe = { name: full.Last_Name, company: full.Account_Name };   // drop the rest
+    render(safe);        // never pass `full` to logging, analytics, or an external POST
+  });
+```
+
+If you genuinely need a narrow projection server-side, `coql` accepts an explicit select list:
+
+```javascript
+ZOHO.CRM.API.coql({
+  select_query: "select Last_Name, Account_Name from Contacts where id = " + id
 });
 ```
 
@@ -308,21 +376,26 @@ ZOHO.CRM.API.getRecord({
 ### Audit logging
 
 ```javascript
-function logAction(action, entity, recordId, details) {
-  const entry = {
-    timestamp: new Date().toISOString(),
-    action: action,           // "view", "edit", "delete"
-    entity: entity,
-    recordId: recordId,
-    userId: getCurrentUserId(),
-    details: details
-  };
-  
-  // Send to secure logging service
+// Resolve the acting user once at PageLoad and reuse it.
+// CONFIG.getCurrentUser() resolves a FLAT object — not wrapped in users[].
+let actor = null;
+ZOHO.CRM.CONFIG.getCurrentUser().then(function (user) {
+  actor = { id: user.id, email: user.email };
+});
+
+function logAction(action, entity, recordId) {
   return ZOHO.CRM.HTTP.post({
-    url: "https://audit-log-service.com/log",
-    body: JSON.stringify(entry)
-  });
+    url: "https://audit-log-service.com/log",   // must be in cspDomains.connect-src
+    headers: { "Content-Type": "application/json" },
+    body: {                                     // HTTP.* takes an Object, not a JSON string
+      timestamp: new Date().toISOString(),
+      action: action,                           // "view" | "edit" | "delete"
+      entity: entity,
+      recordId: recordId,
+      userId: actor && actor.id
+      // Deliberately no field values — log WHAT was touched, never the contents
+    }
+  }).catch(function () { /* audit logging must never break the widget */ });
 }
 
 // Usage
