@@ -687,6 +687,39 @@ Present in the SDK dataset but **absent from the doc sidebar**, so treat it as s
 
 ---
 
+## ZOHO.CRM.ACTION — undocumented namespace
+
+Present in the raw JSDoc data since **v1.0.5** and confirmed in every shipped bundle including v1.5,
+but **absent from `filtered-widget-sdk.json`** (the public API dataset that renders the doc pages).
+Treat as an internal namespace — use only if you know the specific CRM context that requires it.
+
+Two methods confirmed from the v1.5 bundle source:
+
+### setConfig(object)
+
+Sends a `CUSTOM_ACTION_SAVE_CONFIG` postMessage to the CRM host. Used by widgets embedded inside
+CRM Action flows to persist configuration.
+
+```javascript
+ZOHO.CRM.ACTION.setConfig({ key: "value" });
+```
+
+### enableAccountAccess(object)
+
+Sends an `ENABLE_ACCOUNT_ACCESS` postMessage to the CRM host. Likely used in enterprise
+cross-account extension contexts.
+
+```javascript
+ZOHO.CRM.ACTION.enableAccountAccess({ /* object */ });
+```
+
+Neither method has documented parameters, return values, or error shapes in any version of the
+JSDoc dataset. Both return a Promise (same internal postMessage wrapper as all other SDK methods).
+Do not use unless you are certain of the host context that requires it — there is no public
+guidance on when these succeed or fail.
+
+---
+
 ## ZDK.Client
 
 Injected by CRM at runtime for widgets rendered from Client Script or via `openPopup`. It is
