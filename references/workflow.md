@@ -1,5 +1,10 @@
 # ZET Dev Workflow — Local Development to Deployment
 
+> **⚠ Verification status: UNVERIFIED.** The ZET CLI command set, generated project layout, and
+> `zet validate` limits below have not been checked against an authoritative Zoho source (unlike
+> `references/sdk.md`). Confirm against `zet --help` and the current ZET release notes before
+> relying on specifics.
+
 ## 1. Install ZET (one-time)
 
 ```bash
@@ -166,14 +171,18 @@ Then register the widget in CRM using `https://127.0.0.1:5001/app/widget.html`.
 }
 ```
 
-Access in widget JS:
+Access in widget JS — the SDK has **no** translation helper (there is no `ZOHO.CRM.META.translate`),
+so load and apply the strings yourself:
+
 ```javascript
-// ZET provides ZOHO.CRM.META or i18n utilities depending on version
-// Simple approach: fetch translations directly
 fetch("/app/translations/en.json")
   .then(r => r.json())
   .then(t => { document.getElementById("title").textContent = t.widget_title; });
 ```
+
+For locale detection see the i18n section of `references/troubleshooting.md` — it requires a hop
+through `CONFIG.getCurrentUser()` then `API.getUser({ID})`, because `getCurrentUser` does not
+include a `language` field.
 
 ## Debugging tips
 
