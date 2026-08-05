@@ -1,4 +1,4 @@
-# zoho-crm-widget — Claude Code Skill
+# zohoCRM-widgetskills — Claude Code Skill
 
 A Claude Code skill for building Zoho CRM widgets using the ZET CLI (`zoho-extension-toolkit`).
 
@@ -23,19 +23,19 @@ A Claude Code skill for building Zoho CRM widgets using the ZET CLI (`zoho-exten
 ## Install in Claude Code
 
 ```bash
-/install-skill https://github.com/LogeshR15/zoho-crm-widget
+/install-skill https://github.com/LogeshR15/zohoCRM-widgetskills
 ```
 
 Or clone manually into your Claude skills directory:
 
 ```bash
-git clone https://github.com/LogeshR15/zoho-crm-widget ~/.claude/skills/zoho-crm-widget
+git clone https://github.com/LogeshR15/zohoCRM-widgetskills ~/.claude/skills/zohoCRM-widgetskills
 ```
 
 Then invoke with:
 
 ```
-/zoho-crm-widget
+/zohoCRM-widgetskills
 ```
 
 ## Prerequisites

@@ -1,5 +1,5 @@
 ---
-name: zoho-crm-widget
+name: zohoCRM-widgetskills
 description: "Zoho CRM widget development — ZET CLI (zoho-extension-toolkit), plugin-manifest.json schema, CRM JS SDK v1.5 (ZOHO.CRM.API, UI, CONFIG, FUNCTIONS, HTTP, CONNECTION, CONNECTOR, BLUEPRINT, META, WIZARD, $Client, ZDK.Client), local dev workflow, pack and deploy to Sigma. Trigger on 'build a CRM widget', 'create a widget', 'CRM extension', 'zet init', 'plugin-manifest', 'ZOHO.CRM.API', 'ZOHO.embeddedApp', 'ZDK.Client', or any Zoho CRM widget question."
 compatibility: "Requires Node.js v6+ and npm v3+. Install ZET: npm install -g zoho-extension-toolkit. Verify: zet --version (current: 1.0.28)."
 metadata:
