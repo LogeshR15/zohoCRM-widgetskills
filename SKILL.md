@@ -113,6 +113,8 @@ When `mcp__ZohoCRM__*` tools are available, use them to enrich widget developmen
 | `references/security.md` | ✅ | Secrets via `getOrgVariable`, Connections over stored keys, XSS, CSP, permission gating, audit logging, compliance |
 | `references/troubleshooting.md` | ✅ | Widget not loading, `ZOHO` undefined, silent event typos, calls that fail, CORS, i18n + locale, performance |
 | `references/samples.md` | ✅ | 11 official Zoho widget code samples — use cases, widget types, SDK patterns used, and a pattern index to match user requirements to the right example. Load when user asks "show me an example", "how do I build X", or describes a use case |
+| `references/pageload-shapes.md` | ✅ | **Load whenever the widget type is known.** Exact `PageLoad` data payload shape per placement — Entity/EntityId availability table, EntityId string-vs-array rule (silent bug if wrong), full payload examples for button/related-list/blueprint/popup, and fields that are NOT in PageLoad |
+| `references/coql.md` | ✅ | COQL query syntax, both invocation patterns (`API.coql` vs `CONNECTION.invoke`), response shapes (they differ), field naming rules, limits, and ready-to-copy query patterns. Load when user needs to query multiple records, filter by criteria, or use aggregates |
 | `references/workflow.md` | ⚠️ | Dev workflow — `zet run`, cert trust, widget sandbox, `zet validate` errors, `zet pack` output, Sigma upload, cloud_run |
 | `references/manifest.md` | ⚠️ | `plugin-manifest.json` schema — service, widgets, connectors, config fields, locations, validation rules |
 
