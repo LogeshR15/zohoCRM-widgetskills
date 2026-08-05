@@ -107,6 +107,7 @@ When `mcp__ZohoCRM__*` tools are available, use them to enrich widget developmen
 
 | Reference | Verified | Load when the query is about… |
 |-----------|:--------:|-------------------------------|
+| `references/overview.md` | ⚠️ | **Load first for any new user or "what is a widget" question.** Widget definition, CRM edition requirements (Professional/Enterprise/Ultimate), Developer Permissions setup, 200-widget org limit, all 8 widget placement types with location strings, and what widgets can/cannot do |
 | `references/sdk.md` | ✅ | **Load before writing any `ZOHO.*` call.** All 28 API methods, CONFIG(3), META(6), HTTP(5), CONNECTION, CONNECTOR, FUNCTIONS, BLUEPRINT, WIZARD, UI + 4 sub-namespaces, EVENTS, ZDK.Client (v1.4 vs v1.5), $Client — exact signatures, response shapes, the "does not exist" table, and the places Zoho's docs contradict themselves |
 | `references/error-handling.md` | ✅ | Payload-vs-rejection checking, envelope normalizer, empty-vs-permission-denied, retries, init failures, shape traps |
 | `references/security.md` | ✅ | Secrets via `getOrgVariable`, Connections over stored keys, XSS, CSP, permission gating, audit logging, compliance |
