@@ -61,6 +61,9 @@ When `mcp__ZohoCRM__*` tools are available, use them to enrich widget developmen
 | `references/manifest.md` | `plugin-manifest.json` schema — service, modules.widgets, modules.connectors, config fields, location names, validation rules |
 | `references/sdk.md` | Full CRM JS SDK v1.5 — ZDK.Client, ZOHO.embeddedApp, ZOHO.CRM.API, UI, CONFIG, FUNCTIONS, HTTP, CONNECTION, CONNECTOR, BLUEPRINT, META, WIZARD, $Client — method signatures + examples |
 | `references/workflow.md` | Dev workflow — `zet run`, cert trust, widget sandbox, `zet validate` errors, `zet pack` output, Sigma upload, cloud_run |
+| `references/error-handling.md` | Handling API errors — permission errors, retry patterns, missing records, timeouts, graceful degradation, monitoring |
+| `references/security.md` | Security best practices — protecting secrets, input validation, CSP/CORS, auth patterns, compliance, dependency management |
+| `references/troubleshooting.md` | Common issues and fixes — widget not loading, ZOHO undefined, API calls failing, CORS errors, slow performance |
 
 ## Triggers
 
