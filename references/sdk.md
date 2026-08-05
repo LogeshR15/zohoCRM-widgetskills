@@ -720,6 +720,30 @@ guidance on when these succeed or fail.
 
 ---
 
+## ZOHO.CRM.CURRENT_RECORD — undocumented namespace
+
+Found in the official `zdk-methods-sample` (`widget1.html`) downloaded from Zoho Developer Space,
+but **absent from all JSDoc datasets** (v1.0.5, v1.4, v1.5) and from the doc site. Not in the
+filtered public API or the raw bundle source. Source of truth for existence: Zoho's own published
+code sample.
+
+### getRecord()
+
+Returns the current record's data without requiring an explicit `RecordID`. Works like
+`ZOHO.CRM.API.getRecord` but scoped to the widget's host record automatically.
+
+```javascript
+ZOHO.CRM.CURRENT_RECORD.getRecord().then(function(data) {
+  console.log(data);
+});
+```
+
+Return shape is unknown — not documented. Parameters, error handling, and support across widget
+placement types have not been confirmed. Treat as experimental. Prefer `ZOHO.CRM.API.getRecord`
+with the `EntityId` from `PageLoad` data unless CURRENT_RECORD is specifically required.
+
+---
+
 ## ZDK.Client
 
 Injected by CRM at runtime for widgets rendered from Client Script or via `openPopup`. It is
